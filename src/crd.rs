@@ -32,6 +32,7 @@ use serde::{Deserialize, Serialize};
 ///   container: "login-checker"
 /// topicId: "logins"
 /// topicNameAccessEnv: "KAFKA_TOPIC_LOGINS"
+/// groupIdAccessEnv: "KAFKA_LOGINS_CONSUMER_GROUP"
 /// adminClientProperties: "admin-kafka-config"
 /// producerProperties: "producer-kafka-config"
 /// consumerProperties: "consumer-kafka-config"
@@ -41,6 +42,7 @@ use serde::{Deserialize, Serialize};
 /// 2. Session must request Kafka split of topic with id `logins`
 /// 3. Topic name will be fetched from variable `KAFKA_TOPIC_LOGINS` defined in the `login-checker` container spec.
 /// 4. Topic name will be replaced in all occurrences of variable `KAFKA_TOPIC_LOGINS` across all containers.
+/// 5. Consumer group id will be fetched from variable `KAFKA_LOGINS_CONSUMER_GROUP` defined in the `login-checker` container spec.
 ///
 /// ```yaml
 /// filter:
@@ -51,6 +53,7 @@ use serde::{Deserialize, Serialize};
 ///   container: "login-checker"
 /// topicId: "re:logins-[0-9]"
 /// topicNameAccessEnv: "KAFKA_TOPIC_LOGINS_{{ topic_id | trim_start_matches(pat=\"logins-\") }}_{{ resource_name | trim_start_matches(pat=\"login-checker-\") }}"
+/// groupIdAccessEnv: "KAFKA_TOPIC_LOGINS_{{ resource_name | trim_start_matches(pat=\"login-checker-\") }}"
 /// adminClientProperties: "admin-kafka-config"
 /// producerProperties: "producer-kafka-config"
 /// consumerProperties: "consumer-kafka-config"
@@ -59,6 +62,7 @@ use serde::{Deserialize, Serialize};
 /// With above config, when targeting `rollout/login-checker-3/container/login-checker` with Kafka split request of topic with if `logins-8`:
 /// 1. Topic name will be fetched from variable `KAFKA_TOPIC_LOGINS_8_3` defined in `login-checker` container spec.
 /// 2. Topic name will be replaced in all occurrences of variable `KAFKA_TOPIC_LOGINS_8_3` across all containers.
+/// 3. Consumer group id will be fetched from variable `KAFKA_LOGINS_CONSUMER_GROUP_3` defined in the `login-checker` container spec.
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(
     group = "queues.mirrord.metalbear.co",
@@ -88,6 +92,14 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
     /// 1. Fetch Kafka topic name from this variable defined in the targeted container
     /// 2. Replace value of this variable across **all** containers in the target resource's pod template
     topic_name_access_env: String,
+
+    /// [tera](https://keats.github.io/tera/docs/) template for the name of the environment variable in the target resource [`Pod`](k8s_openapi::api::core::v1::Pod) template.
+    /// When rendering, this template is provided with the followingcontext:
+    /// 1. `topic_id` - requested topic id
+    /// 2. `resource_name` - name of the targeted resource
+    ///
+    /// After rendering variable name, mirrord operator will fetch consumer group id from this variable defined in the targeted container.
+    group_id_access_env: String,
 
     /// Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka admin client.
     admin_client_properties: String,
