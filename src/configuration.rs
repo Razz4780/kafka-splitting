@@ -133,10 +133,10 @@ impl KafkaSplittingConfiguration {
             .collect())
     }
 
-    pub fn reolve_target_env(
+    pub fn reolve_splitting_props(
         &self,
         split_target: SplitTarget<'_>,
-    ) -> anyhow::Result<(String, String)> {
+    ) -> anyhow::Result<SplittingProps> {
         let mut matching: Vec<&crd::MirrordKafkaSplittingTopicConsumer> = Default::default();
 
         let consumers = self.topic_consumers.borrow().clone();
@@ -185,7 +185,13 @@ impl KafkaSplittingConfiguration {
         let group_id_env = Tera::one_off(&winner.spec.group_id_access_env, &context, false)
             .context("failed to render groupd id environment variable name")?;
 
-        Ok((topic_name_env, group_id_env))
+        Ok(SplittingProps {
+            topic_name_env,
+            group_id_env,
+            admin_client_config: winner.spec.admin_client_properties.clone(),
+            producer_config: winner.spec.producer_properties.clone(),
+            consumer_config: winner.spec.consumer_properties.clone(),
+        })
     }
 }
 
@@ -358,4 +364,13 @@ impl TopicConsumerExt for crd::MirrordKafkaSplittingTopicConsumer {
             other => other,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct SplittingProps {
+    pub topic_name_env: String,
+    pub group_id_env: String,
+    pub admin_client_config: String,
+    pub producer_config: String,
+    pub consumer_config: String,
 }
