@@ -1,3 +1,6 @@
+//! Definitions of [CustomResource]s specyfing Kafka splitting configuration in the cluster.
+//! These resources are meant to be created by cluster admin.
+
 use std::collections::BTreeMap;
 
 use kube::CustomResource;
@@ -73,7 +76,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct MirrordKafkaSplittingTopicConsumerSpec {
     /// Filter to match against resource that is targeted by the mirrord session.
-    filter: TopicConsumerFilter,
+    pub filter: TopicConsumerFilter,
 
     /// Filter to match against topic id requested in Kafka split by the mirrord session.
     /// Value starting with `re:` should be interpreted as a regular expression to match against topic id requested in the mirrord session.
@@ -81,7 +84,7 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
     /// # **Warning**
     ///
     /// Topic id is **not** topic name. It is a mirrord-specific identifier.
-    topic_id: String,
+    pub topic_id: String,
 
     /// [tera](https://keats.github.io/tera/docs/) template for the name of the environment variable in the target resource [`Pod`](k8s_openapi::api::core::v1::Pod) template.
     /// When rendering, this template is provided with the followingcontext:
@@ -91,7 +94,7 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
     /// After rendering variable name, mirrord operator will:
     /// 1. Fetch Kafka topic name from this variable defined in the targeted container
     /// 2. Replace value of this variable across **all** containers in the target resource's pod template
-    topic_name_access_env: String,
+    pub topic_name_access_env: String,
 
     /// [tera](https://keats.github.io/tera/docs/) template for the name of the environment variable in the target resource [`Pod`](k8s_openapi::api::core::v1::Pod) template.
     /// When rendering, this template is provided with the followingcontext:
@@ -99,16 +102,16 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
     /// 2. `resource_name` - name of the targeted resource
     ///
     /// After rendering variable name, mirrord operator will fetch consumer group id from this variable defined in the targeted container.
-    group_id_access_env: String,
+    pub group_id_access_env: String,
 
     /// Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka admin client.
-    admin_client_properties: String,
+    pub admin_client_properties: String,
 
     /// Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka consumer client.
-    producer_properties: String,
+    pub producer_properties: String,
 
     /// Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka producer client.
-    consumer_properties: String,
+    pub consumer_properties: String,
 }
 
 /// Composable configuration for creating a Kafka client, used in [`MirrordKafkaSplittingTopicConsumer`].
@@ -172,7 +175,7 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
 pub struct MirrordKafkaClientConfigSpec {
     /// Parent of this config.
     #[serde(skip_serializing_if = "Option::is_none")]
-    parent: Option<String>,
+    pub parent: Option<String>,
 
     /// Properties to use when creating a Kafka client.
     ///
@@ -180,7 +183,7 @@ pub struct MirrordKafkaClientConfigSpec {
     /// 1. Resolve value from parent [`MirrordKafkaClientConfig`].
     /// 2. Merge this config into it, replacing entries in case of key conflict.
     ///    Remove all entries with empty values.
-    properties: BTreeMap<String, Option<String>>,
+    pub properties: BTreeMap<String, Option<String>>,
 }
 
 /// Filter for Kubernetes resources that provide a [`Pod`](k8s_openapi::api::core::v1::Pod) template.
