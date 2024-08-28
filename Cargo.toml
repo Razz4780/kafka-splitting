@@ -21,3 +21,7 @@ fancy-regex = "0.13.0"
 tera = "1"
 clap = { version = "4", features = ["derive"] }
 serde_yaml = "0.9"
+rand = "*"
+rdkafka = "0.36.2"
+json-patch = "2.0.0"
+jsonptr = "0.4.7"

@@ -133,7 +133,7 @@ impl KafkaSplittingConfiguration {
             .collect())
     }
 
-    pub fn reolve_splitting_props(
+    pub fn resolve_splitting_props(
         &self,
         split_target: SplitTarget<'_>,
     ) -> anyhow::Result<SplittingProps> {
