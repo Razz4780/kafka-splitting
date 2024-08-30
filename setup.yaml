@@ -17,6 +17,7 @@ spec:
       containers:
         - name: kafka-producer
           image: kafka-splitting
+          imagePullPolicy: Never
           ports:
             - containerPort: 80
           env:
@@ -24,7 +25,7 @@ spec:
               value: "80"
             - name: PRODUCER_bootstrap.servers
               value: kafka.default.svc.cluster.local:9092
-          command: ["/app/cluster.producer"]
+          command: ["/app/cluster-producer"]
 
 ---
 apiVersion: v1
@@ -64,6 +65,7 @@ spec:
       containers:
         - name: kafka-consumer
           image: kafka-splitting
+          imagePullPolicy: Never
           ports:
             - containerPort: 80
           env:
@@ -73,4 +75,4 @@ spec:
               value: dummy-topic
             - name: CONSUMER_group.id
               value: dummy-group
-          command: ["/app/cluster.consumer"]
+          command: ["/app/cluster-consumer"]

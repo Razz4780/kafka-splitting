@@ -9,6 +9,6 @@ helm install \
 
 kubectl apply -f ./setup.yaml
 
-cargo run --bin kafka-splitting -- generate-crds | kubectl apply -f ./setup.yaml
+cargo run --bin kafka-splitting -- generate-crds | kubectl apply -f -
 
 kubectl apply -f ./config.yaml

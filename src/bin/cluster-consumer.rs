@@ -15,6 +15,8 @@ struct Params {
 async fn main() {
     let params = envy::prefixed("CONSUMER_").from_env::<Params>().unwrap();
 
+    eprintln!("CONSUMING MESSAGES FROM {}", params.topic);
+
     let consumer = KafkaConsumer::new(params.consumer_props).unwrap();
     consumer.subscribe(params.topic).await.unwrap();
 

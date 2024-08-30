@@ -43,9 +43,12 @@ where
                 .await
                 .context("failed to receive message")?;
 
+            eprintln!("RECEIVED MESSAGE {message:?}");
             let topic = if (self.filter)(&message) {
+                eprintln!("MATCHES FILTER, PASSING TO {filtered_topic}");
                 filtered_topic
             } else {
+                eprintln!("MATCHES FILTER, PASSING TO {fallback_topic}");
                 fallback_topic
             };
 
@@ -58,12 +61,12 @@ where
                 headers: message.headers().map(BorrowedHeaders::detach),
             };
 
-            if (self.filter)(&message) {
-                self.producer
-                    .send(record)
-                    .await
-                    .context("failed to pass received message")?;
-            }
+            self.producer
+                .send(record)
+                .await
+                .context("failed to pass received message")?;
+
+            eprintln!("MESSAGE PASSED");
         }
     }
 }

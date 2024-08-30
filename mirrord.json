@@ -1,0 +1,16 @@
+{
+    "operator": false,
+    "telemetry": false,
+    "accept_invalid_certificates": true,
+    "feature": {
+        "network": {
+            "incoming": false,
+            "outgoing": true,
+            "dns": true
+        },
+        "fs": {
+            "mode": "localwithoverrides",
+            "local": ".*"
+        }
+    }
+}

@@ -71,7 +71,7 @@ struct PostMessageArgs {
     #[arg(long)]
     timestamp: Option<i64>,
 
-    #[arg(long, short)]
+    #[arg(long, short('H'))]
     header: Vec<String>,
 
     #[arg(long)]
