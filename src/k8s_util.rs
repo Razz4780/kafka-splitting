@@ -1,6 +1,6 @@
 use anyhow::Context;
 use jsonptr::{Pointer, Token};
-use k8s_openapi::api::apps::v1::Deployment;
+use k8s_openapi::api::{apps::v1::Deployment, core::v1::Container};
 use kube::{
     api::{Patch, PatchParams},
     runtime::wait,
@@ -110,4 +110,32 @@ pub async fn wait_for_rollout_completion(
     .context("deployment was deleted")?;
 
     Ok(())
+}
+
+pub fn find_env_value<'a>(container: &'a Container, name: &str) -> anyhow::Result<&'a str> {
+    container
+        .env
+        .iter()
+        .flatten()
+        .find(|env_var| env_var.name == name)
+        .map(|env_var| {
+            env_var
+                .value
+                .as_deref()
+                .context("env value must be provided in place")
+        })
+        .transpose()?
+        .context("env var not found")
+}
+
+pub fn replace_env_value(container: &mut Container, name: &str, value: &str) {
+    container
+        .env
+        .iter_mut()
+        .flatten()
+        .filter(|env_var| env_var.name == name)
+        .for_each(|env_var| {
+            env_var.value_from = None;
+            env_var.value.replace(value.into());
+        })
 }

@@ -4,12 +4,12 @@ use std::{
 };
 
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use kafka_splitting::kafka::KafkaProducer;
+use kafka_splitting::{kafka::KafkaProducer, ApiMessage};
 use rdkafka::{
     message::{Header, OwnedHeaders},
     producer::FutureRecord,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Params {
@@ -32,20 +32,10 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[derive(Deserialize, Serialize)]
-struct Message {
-    topic: String,
-    partition: Option<i32>,
-    payload: Option<String>,
-    key: Option<String>,
-    headers: Option<HashMap<String, Option<String>>>,
-    timestamp: Option<i64>,
-}
-
 async fn handler(
     State(producer): State<KafkaProducer>,
-    Json(mut message): Json<Message>,
-) -> Result<Json<Message>, StatusCode> {
+    Json(mut message): Json<ApiMessage>,
+) -> Result<Json<ApiMessage>, StatusCode> {
     let partition = producer
         .send(FutureRecord {
             topic: &message.topic,

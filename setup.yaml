@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-splitting-producer
+  labels:
+    app: kafka-splitting-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-splitting-producer
+  template:
+    metadata:
+      labels:
+        app: kafka-splitting-producer
+    spec:
+      containers:
+        - name: kafka-producer
+          image: kafka-splitting
+          ports:
+            - containerPort: 80
+          env:
+            - name: PRODUCER_PORT
+              value: "80"
+            - name: PRODUCER_bootstrap.servers
+              value: kafka.default.svc.cluster.local:9092
+          command: ["/app/cluster.producer"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kafka-splitting-producer
+  name: kafka-splitting-producer
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+      nodePort: 30001
+  selector:
+    app: kafka-splitting-producer
+  sessionAffinity: None
+  type: NodePort
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-splitting-consumer
+  labels:
+    app: kafka-splitting-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-splitting-consumer
+  template:
+    metadata:
+      labels:
+        app: kafka-splitting-consumer
+    spec:
+      containers:
+        - name: kafka-consumer
+          image: kafka-splitting
+          ports:
+            - containerPort: 80
+          env:
+            - name: CONSUMER_bootstrap.servers
+              value: kafka.default.svc.cluster.local:9092
+            - name: CONSUMER_topic
+              value: dummy-topic
+            - name: CONSUMER_group.id
+              value: dummy-group
+          command: ["/app/cluster.consumer"]

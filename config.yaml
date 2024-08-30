@@ -1,0 +1,26 @@
+apiVersion: queues.mirrord.metalbear.co/v1alpha
+kind: MirrordKafkaClientConfig
+metadata:
+  name: base-props
+spec:
+  properties:
+    bootstrap.servers: kafka.default.svc.cluster.local:9092
+
+---
+apiVersion: queues.mirrord.metalbear.co/v1alpha
+kind: MirrordKafkaSplittingTopicConsumer
+metadata:
+  name: demo
+spec:
+  adminClientProperties: base-props
+  producerProperties: base-props
+  consumerProperties: base-props
+  filter:
+    apiVersion: apps/v1
+    container: kafka-consumer
+    kind: Deployment
+    name: kafka-splitting-consumer
+    namespace: default
+  groupIdAccessEnv: "CONSUMER_group.id"
+  topicId: demo-topic
+  topicNameAccessEnv: "CONSUMER_topic"
