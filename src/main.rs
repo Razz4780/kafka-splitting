@@ -7,7 +7,11 @@ use k8s_openapi::{api::apps::v1::Deployment, Resource};
 use kafka::{KafkaAdminClient, KafkaConsumer, KafkaProducer, KafkaSplitter};
 use kube::{runtime::reflector::Lookup, Api, Client, Config, CustomResourceExt};
 use rand::Rng;
-use rdkafka::admin::{NewTopic, TopicReplication};
+use rdkafka::{
+    admin::{NewTopic, TopicReplication},
+    message::Headers,
+    Message,
+};
 
 mod configuration;
 mod crd;
@@ -313,14 +317,19 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("failed to wait until target rollout completes")?;
 
-            KafkaSplitter::new(consumer, producer)
-                .run(
-                    &topic_name,
-                    &tmp_topic_fallback_name,
-                    &tmp_topic_filtered_name,
-                )
-                .await
-                .context("Kafka splitter failed")?;
+            KafkaSplitter::new(consumer, producer, |message| {
+                message
+                    .headers()
+                    .map(|headers| headers.iter().any(|header| header.key.contains("mirrord")))
+                    .unwrap_or(false)
+            })
+            .run(
+                &topic_name,
+                &tmp_topic_fallback_name,
+                &tmp_topic_filtered_name,
+            )
+            .await
+            .context("Kafka splitter failed")?;
         }
     }
 

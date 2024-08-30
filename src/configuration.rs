@@ -61,27 +61,27 @@ impl KafkaSplittingConfiguration {
         })
     }
 
-    pub async fn background_task_dead(&mut self) -> anyhow::Error {
-        loop {
-            tokio::select! {
-                Err(..) = self.topic_consumers.changed() => {
-                    break anyhow::anyhow!(
-                        "background task watching {} is dead",
-                        crd::MirrordKafkaSplittingTopicConsumer::plural(&()),
-                    );
-                },
+    // pub async fn background_task_dead(&mut self) -> anyhow::Error {
+    //     loop {
+    //         tokio::select! {
+    //             Err(..) = self.topic_consumers.changed() => {
+    //                 break anyhow::anyhow!(
+    //                     "background task watching {} is dead",
+    //                     crd::MirrordKafkaSplittingTopicConsumer::plural(&()),
+    //                 );
+    //             },
 
-                Err(..) = self.client_configs.changed() => {
-                    break anyhow::anyhow!(
-                        "background task watching {} is dead",
-                        crd::MirrordKafkaClientConfig::plural(&()),
-                    );
-                },
+    //             Err(..) = self.client_configs.changed() => {
+    //                 break anyhow::anyhow!(
+    //                     "background task watching {} is dead",
+    //                     crd::MirrordKafkaClientConfig::plural(&()),
+    //                 );
+    //             },
 
-                else => {},
-            }
-        }
-    }
+    //             else => {},
+    //         }
+    //     }
+    // }
 
     pub fn resolve_client_config(&self, name: &str) -> anyhow::Result<HashMap<String, String>> {
         let configs = self.client_configs.borrow().clone();
