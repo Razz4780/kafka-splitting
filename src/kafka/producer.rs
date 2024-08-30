@@ -6,6 +6,7 @@ use rdkafka::{
     ClientConfig,
 };
 
+#[derive(Clone)]
 pub struct KafkaProducer {
     client: FutureProducer,
 }
@@ -18,12 +19,13 @@ impl KafkaProducer {
         Ok(Self { client })
     }
 
-    pub async fn send(&self, message: FutureRecord<'_, [u8], [u8]>) -> anyhow::Result<()> {
-        self.client
+    pub async fn send(&self, message: FutureRecord<'_, [u8], [u8]>) -> anyhow::Result<i32> {
+        let (partition, _) = self
+            .client
             .send(message, None)
             .await
             .map_err(|(error, _)| error)?;
 
-        Ok(())
+        Ok(partition)
     }
 }

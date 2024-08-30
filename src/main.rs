@@ -1,10 +1,13 @@
-use std::{io, str::FromStr};
+use std::io;
 
 use anyhow::Context;
-use clap::{Parser, Subcommand};
-use configuration::{KafkaSplittingConfiguration, SplitTarget};
+use clap::{Args, Parser, Subcommand};
 use k8s_openapi::{api::apps::v1::Deployment, Resource};
-use kafka::{KafkaAdminClient, KafkaConsumer, KafkaProducer, KafkaSplitter};
+use kafka_splitting::configuration::{KafkaSplittingConfiguration, SplitTarget};
+use kafka_splitting::{
+    crd, k8s_util,
+    kafka::{KafkaAdminClient, KafkaConsumer, KafkaProducer, KafkaSplitter},
+};
 use kube::{runtime::reflector::Lookup, Api, Client, Config, CustomResourceExt};
 use rand::Rng;
 use rdkafka::{
@@ -13,13 +16,8 @@ use rdkafka::{
     Message,
 };
 
-mod configuration;
-mod crd;
-mod k8s_util;
-mod kafka;
-
 #[derive(Parser)]
-struct Args {
+struct MainArgs {
     #[command(subcommand)]
     command: Command,
 }
@@ -28,54 +26,27 @@ struct Args {
 enum Command {
     GenerateCrds,
 
-    ListAll {
-        #[arg(short, long)]
-        namespace: String,
-        kind: ConfigKind,
-    },
-
-    Split {
-        #[arg(short, long)]
-        configuration_namespace: String,
-        #[arg(long)]
-        api_version: String,
-        #[arg(long)]
-        kind: String,
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        namespace: String,
-        #[arg(long)]
-        container_name: String,
-        #[arg(long)]
-        topic_id: String,
-        #[arg(long)]
-        print_only: bool,
-    },
+    RunSplit(SplitArgs),
 }
 
-#[derive(Clone, Copy)]
-enum ConfigKind {
-    ClientConfig,
-    TopicConsumer,
-}
-
-impl FromStr for ConfigKind {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == crd::MirrordKafkaClientConfig::plural(&()) {
-            Ok(Self::ClientConfig)
-        } else if s == crd::MirrordKafkaSplittingTopicConsumer::plural(&()) {
-            Ok(Self::TopicConsumer)
-        } else {
-            anyhow::bail!(
-                "expected one of {}, {}",
-                crd::MirrordKafkaClientConfig::plural(&()),
-                crd::MirrordKafkaSplittingTopicConsumer::plural(&())
-            )
-        }
-    }
+#[derive(Args)]
+struct SplitArgs {
+    #[arg(short, long)]
+    configuration_namespace: String,
+    #[arg(long)]
+    api_version: String,
+    #[arg(long)]
+    kind: String,
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    namespace: String,
+    #[arg(long)]
+    container_name: String,
+    #[arg(long)]
+    topic_id: String,
+    #[arg(long)]
+    print_only: bool,
 }
 
 fn generate_crds<W: io::Write>(mut writer: W) -> anyhow::Result<()> {
@@ -106,56 +77,11 @@ fn generate_crds<W: io::Write>(mut writer: W) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let Args { command } = Args::parse();
+    let MainArgs { command } = MainArgs::parse();
     match command {
         Command::GenerateCrds => generate_crds(std::io::stdout())?,
 
-        Command::ListAll { kind, namespace } => {
-            let config = Config::infer()
-                .await
-                .context("failed to infer kube config")?;
-            let client = Client::try_from(config).context("failed to build kube client")?;
-
-            match kind {
-                ConfigKind::ClientConfig => {
-                    let api = Api::<crd::MirrordKafkaClientConfig>::namespaced(client, &namespace);
-                    let results = api
-                        .list(&Default::default())
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "failed to list {}",
-                                crd::MirrordKafkaClientConfig::plural(&())
-                            )
-                        })?
-                        .items;
-                    for result in results {
-                        println!("NAME=({:?}) SPEC=({:?})", result.metadata.name, result.spec);
-                    }
-                }
-
-                ConfigKind::TopicConsumer => {
-                    let api = Api::<crd::MirrordKafkaSplittingTopicConsumer>::namespaced(
-                        client, &namespace,
-                    );
-                    let results = api
-                        .list(&Default::default())
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "failed to list {}",
-                                crd::MirrordKafkaClientConfig::plural(&())
-                            )
-                        })?
-                        .items;
-                    for result in results {
-                        println!("NAME=({:?}) SPEC={:?}", result.metadata.name, result.spec);
-                    }
-                }
-            }
-        }
-
-        Command::Split {
+        Command::RunSplit(SplitArgs {
             configuration_namespace,
             api_version,
             kind,
@@ -164,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
             container_name,
             topic_id,
             print_only,
-        } => {
+        }) => {
             let config = Config::infer()
                 .await
                 .context("failed to infer kube config")?;
@@ -266,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("Created Kafka clients");
 
             let num_partitions: i32 = admin_client
-                .get_topic_partitions(&topic_name)
+                .get_topic_partitions(topic_name)
                 .await
                 .context("failed to get topic partitions")?
                 .try_into()
@@ -324,7 +250,7 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or(false)
             })
             .run(
-                &topic_name,
+                topic_name,
                 &tmp_topic_fallback_name,
                 &tmp_topic_filtered_name,
             )
