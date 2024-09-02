@@ -10,7 +10,3 @@ helm install \
 mirrord exec -f mirrord.json -- cargo run --bin kafka-splitting -- create-topic --name dummy-topic --partitions 3 --bootstrap-servers kafka.default.svc.cluster.local:9092
 
 kubectl apply -f ./setup.yaml
-
-cargo run --bin kafka-splitting -- generate-crds | kubectl apply -f -
-
-kubectl apply -f ./config.yaml

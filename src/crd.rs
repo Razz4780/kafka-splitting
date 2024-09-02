@@ -71,7 +71,14 @@ use serde::{Deserialize, Serialize};
     group = "queues.mirrord.metalbear.co",
     version = "v1alpha",
     kind = "MirrordKafkaSplittingTopicConsumer",
-    namespaced
+    namespaced,
+    printcolumn = r#"{"name":"topicId", "type":"string", "description":"ID of the consumed topic.", "jsonPath":".spec.topicId"}"#,
+    printcolumn = r#"{"name":"topicNameAccessEnv", "type":"string", "description":"Name of environment variable where topic name can be altered.", "jsonPath":".spec.topicNameAccessEnv"}"#,
+    printcolumn = r#"{"name":"groupIdAccessEnv", "type":"string", "description":"Name of environment variable from where consumer group id can be fetched.", "jsonPath":".spec.groupIdAccessEnv"}"#,
+    printcolumn = r#"{"name":"adminProperties", "type":"string", "description":"Name of MirrordKafkaClientConfig to use when creating admin Kafka client.", "jsonPath":".spec.adminClientProperties"}"#,
+    printcolumn = r#"{"name":"producerProperties", "type":"string", "description":"Name of MirrordKafkaClientConfig to use when creating producer Kafka client.", "jsonPath":".spec.producerProperties"}"#,
+    printcolumn = r#"{"name":"consumerProperties", "type":"string", "description":"Name of MirrordKafkaClientConfig to use when creating consumer Kafka client.", "jsonPath":".spec.consumerProperties"}"#,
+
 )]
 #[serde(rename_all = "camelCase")]
 pub struct MirrordKafkaSplittingTopicConsumerSpec {
@@ -169,7 +176,8 @@ pub struct MirrordKafkaSplittingTopicConsumerSpec {
     group = "queues.mirrord.metalbear.co",
     version = "v1alpha",
     kind = "MirrordKafkaClientConfig",
-    namespaced
+    namespaced,
+    printcolumn = r#"{"name":"parent", "type":"string", "description":"Name of parent resource.", "jsonPath":".spec.parent"}"#,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct MirrordKafkaClientConfigSpec {

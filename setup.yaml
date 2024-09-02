@@ -76,3 +76,235 @@ spec:
             - name: CONSUMER_group.id
               value: dummy-group
           command: ["/app/cluster-consumer"]
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mirrordkafkaclientconfigs.queues.mirrord.metalbear.co
+spec:
+  group: queues.mirrord.metalbear.co
+  names:
+    categories: []
+    kind: MirrordKafkaClientConfig
+    plural: mirrordkafkaclientconfigs
+    shortNames: []
+    singular: mirrordkafkaclientconfig
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Name of parent resource.
+      jsonPath: .spec.parent
+      name: parent
+      type: string
+    name: v1alpha
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for MirrordKafkaClientConfigSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              Composable configuration for creating a Kafka client, used in [`MirrordKafkaSplittingTopicConsumer`]. Resources of this kind should only be created in the operator's namespace. Resources living outside operator's namespace will be ignored.
+
+              # Example
+
+              Assuming we have following resources of this kind:
+
+              `base`: ```yaml properties: client.id: "mirrord-operator" security.protocol: "PLAINTEXT" ```
+
+              `cluster-1`: ```yaml parent: "base" properties: bootstrap.servers: "kafka.default.svc.cluster.local:9092" ```
+
+              `consumer-cluster-1`: ```yaml parent: "cluster-1" properties: group.id: "consumer-group-1" ```
+
+              `consumer-cluster-1-no-client-id`: ```yaml parent: "consumer-cluster-1" properties: client.id: null ```
+
+              `consumer-cluster-1` will resolve to following `.properties` file: ```properties client.id=mirrord-operator security.protocol=PLAINTEXT bootstrap.servers=kafka.default.svc.cluster.local:9092 group.id=consumer-group-1 ```
+
+              `consumer-cluster-1-no-client-id` will resolve to following `.properties` file: ```properties security.protocol=PLAINTEXT bootstrap.servers=kafka.default.svc.cluster.local:9092 group.id=consumer-group-1 ```
+            properties:
+              parent:
+                description: Parent of this config.
+                nullable: true
+                type: string
+              properties:
+                additionalProperties:
+                  nullable: true
+                  type: string
+                description: |-
+                  Properties to use when creating a Kafka client.
+
+                  To resolve final value: 1. Resolve value from parent [`MirrordKafkaClientConfig`]. 2. Merge this config into it, replacing entries in case of key conflict. Remove all entries with empty values.
+                type: object
+            required:
+            - properties
+            type: object
+        required:
+        - spec
+        title: MirrordKafkaClientConfig
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mirrordkafkasplittingtopicconsumers.queues.mirrord.metalbear.co
+spec:
+  group: queues.mirrord.metalbear.co
+  names:
+    categories: []
+    kind: MirrordKafkaSplittingTopicConsumer
+    plural: mirrordkafkasplittingtopicconsumers
+    shortNames: []
+    singular: mirrordkafkasplittingtopicconsumer
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: ID of the consumed topic.
+      jsonPath: .spec.topicId
+      name: topicId
+      type: string
+    - description: Name of environment variable where topic name can be altered.
+      jsonPath: .spec.topicNameAccessEnv
+      name: topicNameAccessEnv
+      type: string
+    - description: Name of environment variable from where consumer group id can be fetched.
+      jsonPath: .spec.groupIdAccessEnv
+      name: groupIdAccessEnv
+      type: string
+    - description: Name of MirrordKafkaClientConfig to use when creating admin Kafka client.
+      jsonPath: .spec.adminClientProperties
+      name: adminProperties
+      type: string
+    - description: Name of MirrordKafkaClientConfig to use when creating producer Kafka client.
+      jsonPath: .spec.producerProperties
+      name: producerProperties
+      type: string
+    - description: Name of MirrordKafkaClientConfig to use when creating consumer Kafka client.
+      jsonPath: .spec.consumerProperties
+      name: consumerProperties
+      type: string
+    name: v1alpha
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for MirrordKafkaSplittingTopicConsumerSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              Top-level admin-side configuration for Kafka splitting.
+
+              This resource describes topic name extraction/injection logic for setting up mirrord sessions that match its filters. Resources of this kind should only be created in the operator's namespace. Resources living outside operator's namespace will be ignored by this specific operator.
+
+              # Precedence in case of multiple matches
+
+              When multiple resource of this kind match the given mirrord session, one must take precedence over all others. Otherwise, a conflict arises and the session is aborted.
+
+              Precedence resolution flow is as follows: 1. Compare precedence of [`MirrordKafkaSplittingTopicConsumerSpec::filter`] 2. In case [`MirrordKafkaSplittingTopicConsumerSpec::filter`]s' precedence is equal, literal [`MirrordKafkaSplittingTopicConsumerSpec::topic_id`] takes precendence over regex-based. 3. Conflict, abort session setup.
+
+              # Examples
+
+              ```yaml filter: apiVersion: "apps/v1" kind: "Deployment" namespace: "default" name: "login-checker" container: "login-checker" topicId: "logins" topicNameAccessEnv: "KAFKA_TOPIC_LOGINS" groupIdAccessEnv: "KAFKA_LOGINS_CONSUMER_GROUP" adminClientProperties: "admin-kafka-config" producerProperties: "producer-kafka-config" consumerProperties: "consumer-kafka-config" ``` With above config: 1. Session must target `deployment/login-checker/container/login-checker` 2. Session must request Kafka split of topic with id `logins` 3. Topic name will be fetched from variable `KAFKA_TOPIC_LOGINS` defined in the `login-checker` container spec. 4. Topic name will be replaced in all occurrences of variable `KAFKA_TOPIC_LOGINS` across all containers. 5. Consumer group id will be fetched from variable `KAFKA_LOGINS_CONSUMER_GROUP` defined in the `login-checker` container spec.
+
+              ```yaml filter: apiVersion: "argoproj.io/v1alpha1" kind: "Rollout" namespace: "default" name: "re:login-checker-[0-9]" container: "login-checker" topicId: "re:logins-[0-9]" topicNameAccessEnv: "KAFKA_TOPIC_LOGINS_{{ topic_id | trim_start_matches(pat=\"logins-\") }}_{{ resource_name | trim_start_matches(pat=\"login-checker-\") }}" groupIdAccessEnv: "KAFKA_TOPIC_LOGINS_{{ resource_name | trim_start_matches(pat=\"login-checker-\") }}" adminClientProperties: "admin-kafka-config" producerProperties: "producer-kafka-config" consumerProperties: "consumer-kafka-config" ```
+
+              With above config, when targeting `rollout/login-checker-3/container/login-checker` with Kafka split request of topic with if `logins-8`: 1. Topic name will be fetched from variable `KAFKA_TOPIC_LOGINS_8_3` defined in `login-checker` container spec. 2. Topic name will be replaced in all occurrences of variable `KAFKA_TOPIC_LOGINS_8_3` across all containers. 3. Consumer group id will be fetched from variable `KAFKA_LOGINS_CONSUMER_GROUP_3` defined in the `login-checker` container spec.
+            properties:
+              adminClientProperties:
+                description: Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka admin client.
+                type: string
+              consumerProperties:
+                description: Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka producer client.
+                type: string
+              filter:
+                description: Filter to match against resource that is targeted by the mirrord session.
+                properties:
+                  apiVersion:
+                    description: API version of the resource, e.g `apps/v1`.
+                    type: string
+                  container:
+                    description: Name of the consuming container.
+                    type: string
+                  kind:
+                    description: Kind of the resource, e.g `Deployment`.
+                    type: string
+                  name:
+                    description: Name of the resource, e.g. `my-deployment` or `re:my-deployment.*`. Value starting with `re:` should be interpreted as a regular expression to match against resource name.
+                    type: string
+                  namespace:
+                    description: Namespace of the resource, e.g. `prod-mirror`.
+                    type: string
+                required:
+                - apiVersion
+                - container
+                - kind
+                - name
+                - namespace
+                type: object
+              groupIdAccessEnv:
+                description: |-
+                  [tera](https://keats.github.io/tera/docs/) template for the name of the environment variable in the target resource [`Pod`](k8s_openapi::api::core::v1::Pod) template. When rendering, this template is provided with the followingcontext: 1. `topic_id` - requested topic id 2. `resource_name` - name of the targeted resource
+
+                  After rendering variable name, mirrord operator will fetch consumer group id from this variable defined in the targeted container.
+                type: string
+              producerProperties:
+                description: Name of [`MirrordKafkaClientConfig`] resource to use for creating Kafka consumer client.
+                type: string
+              topicId:
+                description: |-
+                  Filter to match against topic id requested in Kafka split by the mirrord session. Value starting with `re:` should be interpreted as a regular expression to match against topic id requested in the mirrord session.
+
+                  # **Warning**
+
+                  Topic id is **not** topic name. It is a mirrord-specific identifier.
+                type: string
+              topicNameAccessEnv:
+                description: |-
+                  [tera](https://keats.github.io/tera/docs/) template for the name of the environment variable in the target resource [`Pod`](k8s_openapi::api::core::v1::Pod) template. When rendering, this template is provided with the followingcontext: 1. `topic_id` - requested topic id 2. `resource_name` - name of the targeted resource
+
+                  After rendering variable name, mirrord operator will: 1. Fetch Kafka topic name from this variable defined in the targeted container 2. Replace value of this variable across **all** containers in the target resource's pod template
+                type: string
+            required:
+            - adminClientProperties
+            - consumerProperties
+            - filter
+            - groupIdAccessEnv
+            - producerProperties
+            - topicId
+            - topicNameAccessEnv
+            type: object
+        required:
+        - spec
+        title: MirrordKafkaSplittingTopicConsumer
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+
+---
+apiVersion: queues.mirrord.metalbear.co/v1alpha
+kind: MirrordKafkaClientConfig
+metadata:
+  name: base-props
+spec:
+  properties:
+    bootstrap.servers: kafka.default.svc.cluster.local:9092
+
+---
+apiVersion: queues.mirrord.metalbear.co/v1alpha
+kind: MirrordKafkaSplittingTopicConsumer
+metadata:
+  name: demo
+spec:
+  adminClientProperties: base-props
+  producerProperties: base-props
+  consumerProperties: base-props
+  filter:
+    apiVersion: apps/v1
+    container: kafka-consumer
+    kind: Deployment
+    name: kafka-splitting-consumer
+    namespace: default
+  groupIdAccessEnv: "CONSUMER_group.id"
+  topicId: demo-topic
+  topicNameAccessEnv: "CONSUMER_topic"
