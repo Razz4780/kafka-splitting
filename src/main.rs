@@ -6,6 +6,9 @@ use std::ops::Not;
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
 use fancy_regex::Regex;
+use k8s_openapi::api::apps::v1::DeploymentSpec;
+use k8s_openapi::api::core::v1::{Container, PodSpec, PodTemplateSpec};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use k8s_openapi::{api::apps::v1::Deployment, Resource};
 use kafka_splitting::configuration::{KafkaSplittingConfiguration, SplitTarget};
 use kafka_splitting::{
@@ -13,6 +16,7 @@ use kafka_splitting::{
     kafka::{KafkaAdminClient, KafkaConsumer, KafkaProducer, KafkaSplitter},
 };
 use kafka_splitting::{kafka, ApiMessage};
+use kube::api::ObjectMeta;
 use kube::{runtime::reflector::Lookup, Api, Client, Config, CustomResourceExt};
 use rand::Rng;
 use rdkafka::admin::{NewTopic, TopicReplication};
@@ -238,18 +242,45 @@ async fn run_split(args: SplitArgs) -> anyhow::Result<()> {
         .context("failed to create temporary topics")?;
     eprintln!("Temporary topics created");
 
-    let new_generation = k8s_util::patch_env_name(
-        &api,
-        &target,
-        &splitting_props.topic_name_env,
-        &tmp_topic_fallback_name,
-    )
-    .await
-    .context("failed to patch target deployment")?;
+    tokio::try_join!(
+        async {
+            let new_generation = k8s_util::patch_env_name(
+                &api,
+                &target,
+                &splitting_props.topic_name_env,
+                &tmp_topic_fallback_name,
+            )
+            .await
+            .context("failed to patch target deployment")?;
 
-    k8s_util::wait_for_rollout_completion(api.clone(), &args.name, new_generation)
-        .await
-        .context("failed to wait until target rollout completes")?;
+            k8s_util::wait_for_rollout_completion(api.clone(), &args.name, new_generation)
+                .await
+                .context("failed to wait until target rollout completes")
+        },
+        async {
+            let (name, generation) = copy_pod(
+                &api,
+                target
+                    .spec
+                    .as_ref()
+                    .unwrap()
+                    .template
+                    .spec
+                    .as_ref()
+                    .clone()
+                    .unwrap()
+                    .containers
+                    .clone(),
+                &splitting_props.topic_name_env,
+                &tmp_topic_filtered_name,
+            )
+            .await
+            .context("failed to copy target deployment")?;
+            k8s_util::wait_for_rollout_completion(api.clone(), &name, generation)
+                .await
+                .context("failed to wait until copied target rollout completes")
+        },
+    )?;
 
     KafkaSplitter::new(consumer, producer, kafka::regex_filter(args.filter))
         .run(
@@ -261,6 +292,71 @@ async fn run_split(args: SplitArgs) -> anyhow::Result<()> {
         .context("Kafka splitter failed")?;
 
     Ok(())
+}
+
+async fn copy_pod(
+    api: &Api<Deployment>,
+    mut containers: Vec<Container>,
+    env_name: &str,
+    env_value: &str,
+) -> anyhow::Result<(String, i64)> {
+    containers.iter_mut().for_each(|container| {
+        container
+            .env
+            .as_mut()
+            .into_iter()
+            .flat_map(|env| env.iter_mut())
+            .filter(|env| env.name == env_name)
+            .for_each(|env| {
+                env.value_from = None;
+                env.value = Some(env_value.to_string());
+            });
+    });
+
+    let suffix = rand::thread_rng().gen::<u32>();
+    let label = format!("kafka-splitting-consumer-copied-{suffix:x}");
+    let deployment = Deployment {
+        metadata: ObjectMeta {
+            name: Some(label.clone()),
+            labels: Some([("app".to_string(), label.clone())].into()),
+            ..Default::default()
+        },
+        spec: Some(DeploymentSpec {
+            replicas: Some(1),
+            selector: LabelSelector {
+                match_labels: Some([("app".to_string(), label.clone())].into()),
+                ..Default::default()
+            },
+            template: PodTemplateSpec {
+                metadata: Some(ObjectMeta {
+                    labels: Some([("app".to_string(), label.clone())].into()),
+                    ..Default::default()
+                }),
+                spec: Some(PodSpec {
+                    containers,
+                    ..Default::default()
+                }),
+            },
+            ..Default::default()
+        }),
+        status: None,
+    };
+
+    let deployment = api
+        .create(&Default::default(), &deployment)
+        .await
+        .context("create request failed")?;
+
+    let name = deployment
+        .metadata
+        .name
+        .context("request result contains no name")?;
+    let generation = deployment
+        .metadata
+        .generation
+        .context("request result contains no generation")?;
+
+    Ok((name, generation))
 }
 
 async fn post_message(args: PostMessageArgs) -> anyhow::Result<()> {
